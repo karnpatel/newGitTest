@@ -71,7 +71,10 @@
 ;;; "bad", i.e. out of range, argument to func here will not necessarily
 ;;; crash scheme the way (car '( )) would.
 (define (add-check func numrows numcols)
- ' ( ) ;; replace this line with code
+  (lambda (row col)
+    (if (range-check row numrows col numcols)
+        (func row col)
+        #\.)) ;; replace this line with code
 )
 
 
@@ -123,14 +126,28 @@
 ;;; repeat-rows returns a figure made up of nrepeat copies
 ;;; of a figure, appended vertically (above and below each other)
 (define (repeat-rows nrepeat figure)
-   ' ( ) ;; replace this line with code
+   (make-figure (lambda (row col)
+		  ((figure-func figure) (modulo row (figure-numrows figure)) col))
+		(* nrepeat (figure-numrows figure)) 
+                (figure-numcols figure) 
+                ;; the function just calls the function that repeat-rows received, but 
+                ;; uses modulo to select the correct position.
+		)
   )
 
 ;;; append cols returns the figure made by appending figureb to the
 ;;; right of figurea the number of rows in the resulting figure is the
 ;;; smaller of the number of rows in figurea and figureb
 (define (append-cols figurea figureb)
-   ' ( ) ;; replace this line with code
+   (make-figure (lambda (row col)
+		  (if (>= col (figure-numcols figurea)) ; If the col is past figa scope, use figb(col)
+                      ((figure-func figureb) row (- col (figure-numcols figurea)))
+                      ((figure-func figurea) row col)))
+		(if(> (figure-numrows figurea) (figure-numrows figureb)) ;If figa(rows) > figb(rows) use figb(rows)
+                   (figure-numrows figureb)
+                   (figure-numrows figurea)) 
+                (+ (figure-numcols figurea) (figure-numcols figureb))) ; Add the width of both figures
+
 )
 
 
@@ -138,19 +155,35 @@
 ;;; the number of columns in the resulting figure is the smaller of the number of columns in figurea
 ;;; and figternb
 (define (append-rows figurea figureb)
-    ' ( ) ;; replace this line with code
+    (make-figure (lambda (row col)
+		  (if (>= row (figure-numrows figurea)) ; If the row is past figa scope, use figb(row)
+                      ((figure-func figureb) (- row (figure-numrows figurea)) col)
+                      ((figure-func figurea) row col)))
+                (+ (figure-numrows figurea) (figure-numrows figureb)) ; Add the height of both figures
+                (if(> (figure-numcols figurea) (figure-numcols figureb)) ;If figa(col) > figb(col) use figb(col)
+                   (figure-numcols figureb)
+                   (figure-numcols figurea)) 
+   )
   )
 
 
 ;;; flip-cols returns a figure that is the left-right mirror image of figure
 (define (flip-cols figure)
-   ' ( ) ;; replace this line with code
+   (make-figure (lambda (row col)
+		  ((figure-func figure) row (- (- (figure-numcols figure) 1) col)))
+                ; determine what col to take value from by doing #ofCols - 1 - col
+		(figure-numrows figure)
+                (figure-numcols figure)) 
 )
 
 
 ;;; flip-rows returns a figure that is the up-down mirror image of figure
 (define (flip-rows figure)
-  ' ( ) ;; replace this line with code
+  (make-figure (lambda (row col)
+		  ((figure-func figure) (- (- (figure-numrows figure) 1) row) col))
+                ; determine what col to take value from by doing #ofRows - 1 - row
+		(figure-numrows figure)
+                (figure-numcols figure)) 
 )
 
 
@@ -158,21 +191,41 @@
 ;;; any coordinate in range of either figure should draw,
 ;;;   and a space should appear only if that is the case for both figures
 (define (paste figurea figureb)
- ' ( ) ;; replace this line with code
+  (make-figure (lambda (row col)
+		  (if (not (or (eq? #\space ((figure-func figurea) row col)) (eq? #\. ((figure-func figurea) row col))))
+                      ((figure-func figurea) row col)
+                      (if (not (or (eq? #\space ((figure-func figureb) row col)) (eq? #\. ((figure-func figureb) row col))))
+                          ((figure-func figureb) row col)
+                          (if (and (eq? #\space ((figure-func figurea) row col)) (eq? #\space ((figure-func figureb) row col)))
+                              #\space
+                              #\.))))
+		(max (figure-numrows figurea) (figure-numrows figureb))
+                (max (figure-numcols figurea) (figure-numcols figureb))) 
   )
+
+; Paste: First check if figurea has a char or star at the coordinate, if so use that char
+; Do the same with figureb
+; else: check if both have a space at the coordinate, is so use #\space
+; else: return #\.
 
 
 ;;; rotateCCW causes the figure to be drawn with a 90 degree counter clockwise
 ;;;   rotation
 (define (rotateCCW figure)
- ' ( ) ;; replace this line with code
-  )
+ (make-figure (lambda (row col)
+		  ((figure-func figure) col (- (- (figure-numcols figure) 1) row)))
+		(figure-numcols figure)
+                (figure-numrows figure)) 
+  ) ; This function is a combination of first swapping rows with cols then flipping the rows
 
 
 ;;; rotateCCW causes the figure to be drawn with a 90 degree clockwise rotation
 (define (rotateCW figure)
- ' ( ) ;; replace this line with code
-  )
+ (make-figure (lambda (row col)
+		  ((figure-func figure) (- (- (figure-numrows figure) 1) col) row))
+		(figure-numcols figure)
+                (figure-numrows figure))
+  ) ; This function is a combination of first swapping rows with cols then flipping the cols
 
 
 ;;; excludewindow excludes some segment of a figure, replacing any character
@@ -181,7 +234,13 @@
 ;;; the exclusion window is rectangular only
 
 (define (excludeWindow minrow maxrow mincol maxcol figure )
-' ( ) ;; replace this line with code
+    (make-figure (lambda (row col)
+		  (if (and (<= row maxrow) (>= row minrow) (<= col maxcol) (>= col mincol)) ;check if within the window
+                   #\space ; if yes, then space
+                   ((figure-func figure) row col) ;else?, then figure value
+                   ))
+		(figure-numrows figure)
+                (figure-numcols figure))
   )
 
 
@@ -189,11 +248,40 @@
 
 ;;;; some examples thst should work after just add-check is filled in
 ;;;; above.  (Remove the ;'s at the start of the lines below.)
-;(define fig1 (sw-corner 4))
-;(display-window 0 3 0 3 fig1)
+(define fig1 (sw-corner 4))
+(display-window 0 3 0 3 fig1)
 
-;(define fig2 (repeat-cols 3 fig1))
-;(display-window 0 4 0 12 fig2)
+(define fig2 (repeat-cols 3 fig1))
+(display-window 0 4 0 12 fig2)
+
+(define fig3 (append-rows fig1 fig2))
+(display-window 0 10 0 10 fig3)
+
+(define fig4 (append-rows fig3 fig2))
+(display-window 0 20 0 20 fig4)
+
+(define fig4 (flip-cols fig4))
+(display-window 0 20 0 20 fig4)
+
+(define fig1 (rotateCCW fig1))
+(display-window 0 10 0 10 fig1)
+
+(define fig1 (rotateCCW fig1))
+(display-window 0 10 0 10 fig1)
+
+(define fig1 (rotateCW fig1))
+(display-window 0 10 0 10 fig1)
+
+(define fig1 (rotateCCW fig1))
+(display-window 0 10 0 10 fig1)
+
+(define fig8 (sw-corner 12))
+(display-window 0 14 0 14 fig8)
+;(define fig8 (excludeWindow 5 8 2 14 fig8))
+;(display-window 0 14 0 14 fig8)
+
+;(define fig2 (repeat-rows 3 fig1))
+;(display-window 0 12 0 12 fig2)
 
 ;(display-window 0 12 0 4 (repeat-rows 3 fig1))
 ;(display-window 0 12 0 12 (append-rows fig1 fig1))
@@ -204,7 +292,11 @@
 ;(display-window 0 3 0 3 (rotateCW fig1))
 ;(display-window 0 3 0 3 (rotateCW (rotateCW (rotateCW fig1))) )
 
+(display-window 0 3 0 3 fig1)
+(display-window 0 12 0 12 (paste (flip-rows fig1) fig8))
 ;(display-window 0 3 0 3 (paste fig1 (flip-rows fig1)))
+
+
 
 
 
